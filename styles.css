@@ -1,0 +1,81 @@
+/* ===== 출장 정산 보고서 - 디자인(스타일) ===== */
+:root{ --line:#d8dee6; --ink:#1c2733; --muted:#6b7785; --accent:#2563eb; --bg:#f4f6f9; }
+*{ box-sizing:border-box; }
+body{ margin:0; font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+      background:var(--bg); color:var(--ink); -webkit-text-size-adjust:100%; }
+.wrap{ max-width:760px; margin:0 auto; padding:16px; }
+h1{ font-size:20px; margin:8px 0 4px; }
+.sub{ color:var(--muted); font-size:13px; margin-bottom:16px; }
+.card{ background:#fff; border:1px solid var(--line); border-radius:12px;
+       padding:16px; margin-bottom:16px; }
+.card h2{ font-size:15px; margin:0 0 12px; }
+label{ display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
+input[type=text],input[type=number],input[type=date],select{
+  width:100%; padding:11px 12px; font-size:16px; border:1px solid var(--line);
+  border-radius:9px; background:#fff; color:var(--ink); }
+input:focus,select:focus{ outline:none; border-color:var(--accent); }
+.row{ display:flex; gap:12px; }
+.row > div{ flex:1; }
+.hint{ font-size:12px; color:var(--muted); margin-top:4px; }
+
+/* 영수증 업로드 */
+.upslot{ margin-top:10px; }
+.upload{ display:block; border:1.5px dashed var(--line); border-radius:10px;
+         padding:14px; text-align:center; color:var(--muted); font-size:13px;
+         cursor:pointer; background:#fafbfc; }
+.upload.filled{ border-style:solid; border-color:var(--accent); color:var(--accent); }
+.upload input{ display:none; }
+.thumb{ margin-top:8px; }
+.thumb img{ max-width:100%; border-radius:8px; border:1px solid var(--line); display:block; }
+.del{ margin-top:6px; width:100%; padding:9px; font-size:13px; color:#c0392b;
+      background:#fff; border:1px solid #e3b0a8; border-radius:8px; cursor:pointer; }
+.del:active{ background:#fdecea; }
+.ghost-btn{ width:100%; margin-top:8px; padding:10px; font-size:13px; color:var(--accent);
+            background:#fff; border:1px solid #cfe0ff; border-radius:8px; cursor:pointer; }
+
+.total{ display:flex; justify-content:space-between; align-items:center;
+        background:#eef4ff; border:1px solid #cfe0ff; border-radius:10px;
+        padding:14px 16px; font-weight:700; font-size:17px; margin-top:4px; }
+.btn{ width:100%; padding:15px; font-size:16px; font-weight:700; color:#fff;
+      background:var(--accent); border:none; border-radius:10px; cursor:pointer; }
+.btn:active{ opacity:.9; }
+
+/* ===== 보고서(PDF로 출력될 영역) ===== */
+#report{ background:#fff; color:#111; padding:28px; }
+#report .doc-title{ text-align:center; font-size:22px; font-weight:800;
+                    letter-spacing:4px; border-bottom:3px solid #111;
+                    padding-bottom:12px; margin-bottom:18px; }
+#report .doc-sub{ text-align:center; color:#555; font-size:12px; margin-bottom:20px; }
+#report td.calc-row{ font-size:11px; color:#555; font-weight:400; line-height:1.45;
+                     background:#fafafa; text-align:left; }
+#report td.calc-row .carinfo{ color:#888; }
+#report table{ width:100%; border-collapse:collapse; font-size:13px; }
+#report th,#report td{ border:1px solid #888; padding:9px 10px; text-align:left;
+                       vertical-align:middle; }
+#report th{ background:#f0f2f5; width:32%; font-weight:600; }
+#report td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+#report .sum-row th,#report .sum-row td{ background:#fff7e6; font-weight:800; font-size:15px; }
+#report .calc{ color:#666; font-size:11px; }
+#report h3{ font-size:14px; margin:22px 0 10px; border-left:4px solid #111;
+            padding-left:8px; }
+#report .evidence{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+#report .ev{ border:1px solid #aaa; border-radius:6px; padding:8px; min-height:150px;
+             display:flex; flex-direction:column; }
+#report .ev .cap{ font-size:11px; color:#555; font-weight:600; margin-bottom:6px;
+                  text-align:center; }
+#report .ev .box{ flex:1; display:flex; align-items:center; justify-content:center;
+                  color:#bbb; font-size:11px; border:1px dashed #ccc; border-radius:4px;
+                  min-height:120px; }
+#report .ev img{ max-width:100%; max-height:280px; border-radius:4px; }
+
+/* ===== 인쇄(=PDF 저장) 시: 보고서만 깔끔하게 출력 ===== */
+@media print{
+  body{ background:#fff; }
+  .wrap{ max-width:none; margin:0; padding:0; }
+  h1, .sub, .card:not(#reportCard){ display:none !important; }
+  #reportCard{ border:none !important; padding:0 !important; margin:0 !important; }
+  #reportCard > h2{ display:none; }
+  #report{ padding:0; }
+  #report .ev, #report tr, #report table{ break-inside:avoid; page-break-inside:avoid; }
+  @page{ size:A4; margin:14mm; }
+}

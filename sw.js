@@ -1,7 +1,7 @@
 // 서비스워커 - 앱 파일을 캐시해 두어 오프라인에서도 실행되게 함
-const CACHE = "trip-report-v3";
+const CACHE = "trip-report-v4";
 const ASSETS = [
-  "./", "./index.html", "./manifest.json",
+  "./", "./index.html", "./styles.css", "./app.js", "./manifest.json",
   "./icon-192.png", "./icon-512.png"
 ];
 
