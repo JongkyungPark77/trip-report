@@ -114,6 +114,40 @@ yearCustom.addEventListener("input", ()=> save("tripReport_year", yearCustom.val
 document.getElementById("eff").addEventListener("input",        e=> save("tripReport_eff", e.target.value));
 document.getElementById("deprecRate").addEventListener("input", e=> save("tripReport_deprec", e.target.value));
 
+/* ===== [출장지] ===== */
+// 지역별 주요 도시 (목록에 없으면 '직접입력')
+const DESTINATIONS = {
+  "특별·광역시": ["서울","부산","대구","인천","광주","대전","울산","세종"],
+  "경기": ["수원","성남","용인","고양","부천","안산","화성","평택","파주","의정부"],
+  "강원": ["춘천","원주","강릉","속초"],
+  "충청": ["청주","충주","천안","아산","당진"],
+  "전라": ["전주","군산","익산","여수","순천","목포"],
+  "경상": ["포항","구미","경주","안동","창원","김해","진주","양산","거제"],
+  "제주": ["제주","서귀포"],
+};
+const CUSTOM_DEST = "직접입력";
+const destSel    = document.getElementById("dest");
+const destCustom = document.getElementById("destCustom");
+
+// 드롭다운 채우기 (지역별 그룹 + 직접입력)
+destSel.innerHTML = '<option value="">출장지 선택</option>';
+for(const [region, cities] of Object.entries(DESTINATIONS)){
+  const g = document.createElement("optgroup"); g.label = region;
+  cities.forEach(city=> addOption(g, city));
+  destSel.appendChild(g);
+}
+addOption(destSel, CUSTOM_DEST);
+
+function getDest(){
+  if(destSel.value === CUSTOM_DEST) return destCustom.value.trim() || "-";
+  return destSel.value || "-";
+}
+function updateDestCustom(){
+  destCustom.style.display = (destSel.value === CUSTOM_DEST) ? "block" : "none";
+}
+destSel.addEventListener("change", ()=>{ updateDestCustom(); render(); });
+updateDestCustom();
+
 /* ===== [증빙] ===== */
 const EVIDENCE = [
   { key:"map",     label:"출장지까지 거리 지도" },
@@ -213,7 +247,7 @@ function render(){
   document.getElementById("carSub").textContent = `차량: ${carName} · 연비 ${c.eff} km/L`;
 
   const period = periodText();
-  const dest = document.getElementById("dest").value || "-";
+  const dest = getDest();
 
   const evHtml = EVIDENCE.map(ev=>{
     const inner = images[ev.key]
@@ -277,7 +311,8 @@ render();
 /* ===== [PDF] ===== */
 // PDF 저장 = 브라우저 인쇄 기능 사용 (html2canvas 빈 페이지 문제 회피, 글자도 선명함)
 document.getElementById("makePdf").addEventListener("click", ()=>{
-  const dest = document.getElementById("dest").value || "출장";
+  const d = getDest();
+  const dest = (d && d !== "-") ? d : "출장";
   const start = document.getElementById("startDate").value || "";
   const origTitle = document.title;
   document.title = `출장정산보고서_${dest}_${start}`;   // 저장 시 기본 파일명에 반영
