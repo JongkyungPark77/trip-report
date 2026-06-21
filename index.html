@@ -92,6 +92,24 @@
   <h1>🚗 출장 정산 보고서</h1>
   <div class="sub" id="carSub">차량: 2018년식 혼다 파일럿</div>
 
+  <!-- ===== 차량 설정 (각자 한 번만 설정 → 저장됨) ===== -->
+  <div class="card">
+    <h2>⚙️ 차량 설정 <span style="font-weight:400;color:var(--muted);font-size:12px">(한 번만 설정하면 저장돼요)</span></h2>
+    <label>차종</label>
+    <input type="text" id="carName" placeholder="예: 2018년식 혼다 파일럿">
+    <div class="row">
+      <div>
+        <label>연비 (km/L)</label>
+        <input type="number" id="eff" placeholder="8.7" min="0.1" step="0.1" inputmode="decimal">
+      </div>
+      <div>
+        <label>감가상각 반영율 (%)</label>
+        <input type="number" id="deprecRate" placeholder="10" min="0" step="1" inputmode="decimal">
+      </div>
+    </div>
+    <div class="hint">연료비 = 왕복거리 ÷ 연비 × 유가 + 감가상각율. 회사·차량 기준에 맞게 설정하세요.</div>
+  </div>
+
   <!-- ===== 입력 ===== -->
   <div class="card">
     <h2>1. 출장 정보 입력</h2>
@@ -113,10 +131,6 @@
     <label>편도 거리 (km)</label>
     <input type="number" id="dist" placeholder="예: 150" min="0" inputmode="decimal">
     <div class="hint">왕복거리 = 편도 × 2 로 자동 계산됩니다.</div>
-
-    <label>차량 연비 (km/L)</label>
-    <input type="number" id="eff" placeholder="8.7" min="0.1" step="0.1" inputmode="decimal">
-    <div class="hint">한 번 입력하면 다음 보고서 작성 시 이 값이 자동으로 채워집니다. (기본 8.7)</div>
 
     <label>휘발유 가격 (원/L)</label>
     <input type="number" id="fuelPrice" placeholder="예: 1650" min="0" inputmode="decimal">
@@ -163,22 +177,27 @@
 </div>
 
 <script>
-const DEFAULT_EFF = 8.7;         // 기본 연비 km/L (저장된 값이 있으면 그 값 사용)
-const EFF_STORE_KEY = "tripReport_eff";   // 연비를 브라우저에 기억시키는 키
-const DEPREC_RATE = 0.10;       // 감가상각비 반영분 (연료비에 10% 가산)
-const CAR = "2018년식 혼다 파일럿";
-let fuelOverride = null;        // 연료비를 직접 수정하면 그 값, 아니면 null(자동계산 사용)
+const DEFAULT_EFF = 8.7;            // 기본 연비 km/L
+const DEFAULT_DEPREC = 10;          // 기본 감가상각 반영율 (%)
+const DEFAULT_CAR = "2018년식 혼다 파일럿";
+let fuelOverride = null;            // 연료비를 직접 수정하면 그 값, 아니면 null(자동계산 사용)
 
-// 저장해 둔 연비 불러오기 (없으면 기본값) → 다음번에도 자동으로 채워짐
-const effInput = document.getElementById("eff");
-effInput.value = localStorage.getItem(EFF_STORE_KEY) || DEFAULT_EFF;
-effInput.addEventListener("input", ()=>{
-  if(effInput.value) localStorage.setItem(EFF_STORE_KEY, effInput.value);
-});
+// 차량 설정값을 브라우저에 기억시킨다 (한 번 설정하면 다음에도 자동으로 채워짐)
+function bindSetting(id, storeKey, fallback){
+  const el = document.getElementById(id);
+  el.value = localStorage.getItem(storeKey) || fallback;
+  el.addEventListener("input", ()=>{
+    if(el.value !== "") localStorage.setItem(storeKey, el.value);
+  });
+}
+bindSetting("carName",    "tripReport_car",    DEFAULT_CAR);
+bindSetting("eff",        "tripReport_eff",    DEFAULT_EFF);
+bindSetting("deprecRate", "tripReport_deprec", DEFAULT_DEPREC);
 
 // 첨부 항목 정의
 const EVIDENCE = [
   { key:"map",     label:"출장지까지 거리 지도" },
+  { key:"opinet",  label:"오피넷 평균 유가 캡처" },
   { key:"carspec", label:"차량 제원(연비) 이미지" },
   { key:"lodging", label:"숙박비 영수증" },
   { key:"transit", label:"대중교통 영수증" },
@@ -235,18 +254,20 @@ const won = n => (Math.round(n)||0).toLocaleString("ko-KR") + " 원";
 const num = id => parseFloat(document.getElementById(id).value) || 0;
 
 function calc(){
-  const eff = num("eff") || DEFAULT_EFF;           // 입력한 연비 (없으면 기본값)
+  const eff = num("eff") || DEFAULT_EFF;           // 설정한 연비 (없으면 기본값)
+  const deprecPct = (document.getElementById("deprecRate").value === "")
+                      ? DEFAULT_DEPREC : num("deprecRate");   // 감가상각 반영율(%)
   const oneway = num("dist");
   const roundtrip = oneway * 2;
   const price = num("fuelPrice");
   const liters = roundtrip / eff;
   const fuelBase = liters * price;                 // 순수 연료 소모비
-  const deprec = fuelBase * DEPREC_RATE;           // 감가상각 반영분(+10%)
+  const deprec = fuelBase * (deprecPct / 100);     // 감가상각 반영분
   const fuelCalc = fuelBase + deprec;              // 자동계산 연료비
   const fuelCost = (fuelOverride != null) ? fuelOverride : fuelCalc;  // 실제 적용 연료비
   const lodging = num("lodging"), toll = num("toll"), transit = num("transit");
   const total = fuelCost + lodging + toll + transit;
-  return { eff, oneway, roundtrip, price, liters, fuelBase, deprec, fuelCalc, fuelCost, lodging, toll, transit, total };
+  return { eff, deprecPct, oneway, roundtrip, price, liters, fuelBase, deprec, fuelCalc, fuelCost, lodging, toll, transit, total };
 }
 
 // 출장 기간 텍스트 (n박 n+1일)
@@ -266,11 +287,12 @@ function render(){
 
   // 자동계산 연료비 안내 + (직접 수정 안 했으면) 입력칸을 자동값으로 채움
   document.getElementById("fuelAutoHint").textContent =
-    `자동계산: ${won(c.fuelCalc)}  (소모비 ${won(c.fuelBase)} + 감가상각 10% ${won(c.deprec)})`;
+    `자동계산: ${won(c.fuelCalc)}  (소모비 ${won(c.fuelBase)} + 감가상각 ${c.deprecPct}% ${won(c.deprec)})`;
   const fuelField = document.getElementById("fuelCostInput");
   if(fuelOverride == null) fuelField.value = c.fuelCalc ? Math.round(c.fuelCalc) : "";
 
-  document.getElementById("carSub").textContent = `차량: ${CAR} · 연비 ${c.eff} km/L`;
+  const carName = document.getElementById("carName").value || "차량 미설정";
+  document.getElementById("carSub").textContent = `차량: ${carName} · 연비 ${c.eff} km/L`;
 
   const period = periodText();
   const dest = document.getElementById("dest").value || "-";
@@ -287,13 +309,13 @@ function render(){
 
   document.getElementById("report").innerHTML = `
     <div class="doc-title">출 장 정 산 보 고 서</div>
-    <div class="doc-sub">차량: ${CAR} (연비 ${c.eff} km/L)</div>
+    <div class="doc-sub">차량: ${carName} (연비 ${c.eff} km/L)</div>
     <table>
       <tr><th>출장기간</th><td>${period}</td></tr>
       <tr><th>출장지</th><td>${dest}</td></tr>
       <tr><th>출장거리</th><td>편도 ${c.oneway} km / 왕복 ${c.roundtrip} km</td></tr>
       <tr><th>소모 연료비
-        <div class="calc">왕복 ${c.roundtrip}km ÷ ${c.eff}km/L = ${c.liters.toFixed(2)}L × ${won(c.price)} = ${won(c.fuelBase)}<br>+ 감가상각 10% (${won(c.deprec)}) = ${won(c.fuelCalc)}${adjustNote}</div></th>
+        <div class="calc">왕복 ${c.roundtrip}km ÷ ${c.eff}km/L = ${c.liters.toFixed(2)}L × ${won(c.price)} = ${won(c.fuelBase)}<br>+ 감가상각 ${c.deprecPct}% (${won(c.deprec)}) = ${won(c.fuelCalc)}${adjustNote}</div></th>
         <td class="num">${won(c.fuelCost)}</td></tr>
       <tr><th>숙박비</th><td class="num">${won(c.lodging)}</td></tr>
       <tr><th>톨게이트 비용</th><td class="num">${won(c.toll)}</td></tr>
