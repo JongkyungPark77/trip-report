@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>출장 정산 보고서</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2563eb">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{ --line:#d8dee6; --ink:#1c2733; --muted:#6b7785; --accent:#2563eb; --bg:#f4f6f9; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+        background:var(--bg); color:var(--ink); -webkit-text-size-adjust:100%; }
+  .wrap{ max-width:760px; margin:0 auto; padding:16px; }
+  h1{ font-size:20px; margin:8px 0 4px; }
+  .sub{ color:var(--muted); font-size:13px; margin-bottom:16px; }
+  .card{ background:#fff; border:1px solid var(--line); border-radius:12px;
+         padding:16px; margin-bottom:16px; }
+  .card h2{ font-size:15px; margin:0 0 12px; }
+  label{ display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
+  input[type=text],input[type=number],input[type=date]{
+    width:100%; padding:11px 12px; font-size:16px; border:1px solid var(--line);
+    border-radius:9px; background:#fff; color:var(--ink); }
+  input:focus{ outline:none; border-color:var(--accent); }
+  .row{ display:flex; gap:12px; }
+  .row > div{ flex:1; }
+  .hint{ font-size:12px; color:var(--muted); margin-top:4px; }
+
+  /* 영수증 업로드 */
+  .upslot{ margin-top:10px; }
+  .upload{ display:block; border:1.5px dashed var(--line); border-radius:10px;
+           padding:14px; text-align:center; color:var(--muted); font-size:13px;
+           cursor:pointer; background:#fafbfc; }
+  .upload.filled{ border-style:solid; border-color:var(--accent); color:var(--accent); }
+  .upload input{ display:none; }
+  .thumb{ margin-top:8px; }
+  .thumb img{ max-width:100%; border-radius:8px; border:1px solid var(--line); display:block; }
+  .del{ margin-top:6px; width:100%; padding:9px; font-size:13px; color:#c0392b;
+        background:#fff; border:1px solid #e3b0a8; border-radius:8px; cursor:pointer; }
+  .del:active{ background:#fdecea; }
+  .ghost-btn{ width:100%; margin-top:8px; padding:10px; font-size:13px; color:var(--accent);
+              background:#fff; border:1px solid #cfe0ff; border-radius:8px; cursor:pointer; }
+
+  .total{ display:flex; justify-content:space-between; align-items:center;
+          background:#eef4ff; border:1px solid #cfe0ff; border-radius:10px;
+          padding:14px 16px; font-weight:700; font-size:17px; margin-top:4px; }
+  .btn{ width:100%; padding:15px; font-size:16px; font-weight:700; color:#fff;
+        background:var(--accent); border:none; border-radius:10px; cursor:pointer; }
+  .btn:active{ opacity:.9; }
+
+  /* ===== 보고서(PDF로 출력될 영역) ===== */
+  #report{ background:#fff; color:#111; padding:28px; }
+  #report .doc-title{ text-align:center; font-size:22px; font-weight:800;
+                      letter-spacing:4px; border-bottom:3px solid #111;
+                      padding-bottom:12px; margin-bottom:4px; }
+  #report .doc-sub{ text-align:center; color:#555; font-size:12px; margin-bottom:20px; }
+  #report table{ width:100%; border-collapse:collapse; font-size:13px; }
+  #report th,#report td{ border:1px solid #888; padding:9px 10px; text-align:left;
+                         vertical-align:middle; }
+  #report th{ background:#f0f2f5; width:32%; font-weight:600; }
+  #report td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  #report .sum-row th,#report .sum-row td{ background:#fff7e6; font-weight:800; font-size:15px; }
+  #report .calc{ color:#666; font-size:11px; }
+  #report h3{ font-size:14px; margin:22px 0 10px; border-left:4px solid #111;
+              padding-left:8px; }
+  #report .evidence{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  #report .ev{ border:1px solid #aaa; border-radius:6px; padding:8px; min-height:150px;
+               display:flex; flex-direction:column; }
+  #report .ev .cap{ font-size:11px; color:#555; font-weight:600; margin-bottom:6px;
+                    text-align:center; }
+  #report .ev .box{ flex:1; display:flex; align-items:center; justify-content:center;
+                    color:#bbb; font-size:11px; border:1px dashed #ccc; border-radius:4px;
+                    min-height:120px; }
+  #report .ev img{ max-width:100%; max-height:280px; border-radius:4px; }
+
+  /* ===== 인쇄(=PDF 저장) 시: 보고서만 깔끔하게 출력 ===== */
+  @media print{
+    body{ background:#fff; }
+    .wrap{ max-width:none; margin:0; padding:0; }
+    h1, .sub, .card:not(#reportCard){ display:none !important; }
+    #reportCard{ border:none !important; padding:0 !important; margin:0 !important; }
+    #reportCard > h2{ display:none; }
+    #report{ padding:0; }
+    #report .ev, #report tr, #report table{ break-inside:avoid; page-break-inside:avoid; }
+    @page{ size:A4; margin:14mm; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🚗 출장 정산 보고서</h1>
+  <div class="sub" id="carSub">차량: 2018년식 혼다 파일럿</div>
+
+  <!-- ===== 입력 ===== -->
+  <div class="card">
+    <h2>1. 출장 정보 입력</h2>
+    <div class="row">
+      <div>
+        <label>출장 시작일</label>
+        <input type="date" id="startDate">
+      </div>
+      <div>
+        <label>출장 종료일</label>
+        <input type="date" id="endDate">
+      </div>
+    </div>
+    <div class="hint">당일 출장이면 종료일을 비워두거나 시작일과 같게 두세요. (1박 2일 등 자동 표시)</div>
+
+    <label>출장지</label>
+    <input type="text" id="dest" placeholder="예: 대전">
+
+    <label>편도 거리 (km)</label>
+    <input type="number" id="dist" placeholder="예: 150" min="0" inputmode="decimal">
+    <div class="hint">왕복거리 = 편도 × 2 로 자동 계산됩니다.</div>
+
+    <label>차량 연비 (km/L)</label>
+    <input type="number" id="eff" placeholder="8.7" min="0.1" step="0.1" inputmode="decimal">
+    <div class="hint">한 번 입력하면 다음 보고서 작성 시 이 값이 자동으로 채워집니다. (기본 8.7)</div>
+
+    <label>휘발유 가격 (원/L)</label>
+    <input type="number" id="fuelPrice" placeholder="예: 1650" min="0" inputmode="decimal">
+    <div class="hint">오피넷(opinet.co.kr)에서 출장일 전국 평균가를 확인해 입력하세요. (추후 자동화 예정)</div>
+  </div>
+
+  <div class="card">
+    <h2>2. 기타 비용</h2>
+    <label>숙박비 (원)</label>
+    <input type="number" id="lodging" placeholder="0" min="0" inputmode="numeric">
+    <label>톨게이트 비용 (원)</label>
+    <input type="number" id="toll" placeholder="0" min="0" inputmode="numeric">
+    <label>대중교통 비용 (원)</label>
+    <input type="number" id="transit" placeholder="0" min="0" inputmode="numeric">
+  </div>
+
+  <!-- ===== 증빙 업로드 ===== -->
+  <div class="card">
+    <h2>3. 증빙 첨부 (사진/캡처 업로드)</h2>
+    <div class="hint" style="margin-bottom:8px">휴대폰에서 누르면 사진첩·카메라가 열립니다. 첨부 후 '삭제' 버튼으로 지울 수 있어요.</div>
+    <div id="uploads"></div>
+  </div>
+
+  <!-- ===== 연료비 확인 & 합계 & 생성 ===== -->
+  <div class="card">
+    <h2>4. 연료비 확인 &amp; 정산 합계</h2>
+
+    <label>연료비 (자동계산 · 직접 수정 가능)</label>
+    <input type="number" id="fuelCostInput" inputmode="numeric" placeholder="편도거리·유가 입력 시 자동 계산">
+    <div class="hint" id="fuelAutoHint">자동계산: -</div>
+    <button type="button" class="ghost-btn" id="resetFuel">↻ 자동계산값으로 되돌리기</button>
+    <div class="hint">회사 SAP 계산값과 차이가 있으면 자동계산된 금액 이내에서 직접 수정이 가능합니다.</div>
+
+    <div class="total" style="margin-top:14px"><span>총 합계</span><span id="grand">0 원</span></div>
+    <br>
+    <button class="btn" id="makePdf">📄 PDF로 저장하기</button>
+  </div>
+
+  <!-- ===== PDF로 출력될 보고서 ===== -->
+  <div class="card" id="reportCard">
+    <h2>미리보기</h2>
+    <div id="report"></div>
+  </div>
+</div>
+
+<script>
+const DEFAULT_EFF = 8.7;         // 기본 연비 km/L (저장된 값이 있으면 그 값 사용)
+const EFF_STORE_KEY = "tripReport_eff";   // 연비를 브라우저에 기억시키는 키
+const DEPREC_RATE = 0.10;       // 감가상각비 반영분 (연료비에 10% 가산)
+const CAR = "2018년식 혼다 파일럿";
+let fuelOverride = null;        // 연료비를 직접 수정하면 그 값, 아니면 null(자동계산 사용)
+
+// 저장해 둔 연비 불러오기 (없으면 기본값) → 다음번에도 자동으로 채워짐
+const effInput = document.getElementById("eff");
+effInput.value = localStorage.getItem(EFF_STORE_KEY) || DEFAULT_EFF;
+effInput.addEventListener("input", ()=>{
+  if(effInput.value) localStorage.setItem(EFF_STORE_KEY, effInput.value);
+});
+
+// 첨부 항목 정의
+const EVIDENCE = [
+  { key:"map",     label:"출장지까지 거리 지도" },
+  { key:"carspec", label:"차량 제원(연비) 이미지" },
+  { key:"lodging", label:"숙박비 영수증" },
+  { key:"transit", label:"대중교통 영수증" },
+  { key:"toll",    label:"톨게이트 영수증" },
+];
+const images = {};  // key -> dataURL
+
+// 업로드 슬롯 생성 (썸네일·삭제버튼은 label 밖에 둬야 클릭이 겹치지 않음)
+const upWrap = document.getElementById("uploads");
+EVIDENCE.forEach(ev=>{
+  const slot = document.createElement("div");
+  slot.className = "upslot";
+  slot.innerHTML = `
+    <label class="upload" id="up-${ev.key}">📎 ${ev.label} 첨부
+      <input type="file" accept="image/*" data-key="${ev.key}">
+    </label>
+    <div class="thumb" id="thumb-${ev.key}"></div>`;
+  upWrap.appendChild(slot);
+});
+
+// 파일 선택 → 미리보기 + 삭제버튼 표시
+document.querySelectorAll('.upload input').forEach(inp=>{
+  inp.addEventListener("change", e=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const key = e.target.dataset.key;
+    const reader = new FileReader();
+    reader.onload = ev=>{
+      images[key] = ev.target.result;
+      document.getElementById("up-"+key).classList.add("filled");
+      document.getElementById("thumb-"+key).innerHTML =
+        `<img src="${ev.target.result}"><button type="button" class="del" data-key="${key}">🗑 첨부 삭제</button>`;
+      render();
+    };
+    reader.readAsDataURL(file);
+  });
+});
+
+// 삭제 버튼 (이벤트 위임)
+upWrap.addEventListener("click", e=>{
+  const btn = e.target.closest(".del");
+  if(!btn) return;
+  const key = btn.dataset.key;
+  delete images[key];
+  document.getElementById("thumb-"+key).innerHTML = "";
+  const lab = document.getElementById("up-"+key);
+  lab.classList.remove("filled");
+  lab.querySelector("input").value = "";   // 같은 파일을 다시 선택할 수 있게 초기화
+  render();
+});
+
+// 숫자 포맷
+const won = n => (Math.round(n)||0).toLocaleString("ko-KR") + " 원";
+const num = id => parseFloat(document.getElementById(id).value) || 0;
+
+function calc(){
+  const eff = num("eff") || DEFAULT_EFF;           // 입력한 연비 (없으면 기본값)
+  const oneway = num("dist");
+  const roundtrip = oneway * 2;
+  const price = num("fuelPrice");
+  const liters = roundtrip / eff;
+  const fuelBase = liters * price;                 // 순수 연료 소모비
+  const deprec = fuelBase * DEPREC_RATE;           // 감가상각 반영분(+10%)
+  const fuelCalc = fuelBase + deprec;              // 자동계산 연료비
+  const fuelCost = (fuelOverride != null) ? fuelOverride : fuelCalc;  // 실제 적용 연료비
+  const lodging = num("lodging"), toll = num("toll"), transit = num("transit");
+  const total = fuelCost + lodging + toll + transit;
+  return { eff, oneway, roundtrip, price, liters, fuelBase, deprec, fuelCalc, fuelCost, lodging, toll, transit, total };
+}
+
+// 출장 기간 텍스트 (n박 n+1일)
+function periodText(){
+  const s = document.getElementById("startDate").value;
+  const e = document.getElementById("endDate").value;
+  if(!s) return "-";
+  if(!e || e === s) return `${s} (당일)`;
+  const nights = Math.round((new Date(e) - new Date(s)) / 86400000);
+  if(nights < 0) return `${s} ~ ${e}`;       // 종료일이 더 빠르면 그냥 범위만
+  return `${s} ~ ${e} (${nights}박 ${nights+1}일)`;
+}
+
+function render(){
+  const c = calc();
+  document.getElementById("grand").textContent = won(c.total);
+
+  // 자동계산 연료비 안내 + (직접 수정 안 했으면) 입력칸을 자동값으로 채움
+  document.getElementById("fuelAutoHint").textContent =
+    `자동계산: ${won(c.fuelCalc)}  (소모비 ${won(c.fuelBase)} + 감가상각 10% ${won(c.deprec)})`;
+  const fuelField = document.getElementById("fuelCostInput");
+  if(fuelOverride == null) fuelField.value = c.fuelCalc ? Math.round(c.fuelCalc) : "";
+
+  document.getElementById("carSub").textContent = `차량: ${CAR} · 연비 ${c.eff} km/L`;
+
+  const period = periodText();
+  const dest = document.getElementById("dest").value || "-";
+
+  const evHtml = EVIDENCE.map(ev=>{
+    const inner = images[ev.key]
+      ? `<img src="${images[ev.key]}">`
+      : `<div class="box">첨부 공간</div>`;
+    return `<div class="ev"><div class="cap">${ev.label}</div>${inner}</div>`;
+  }).join("");
+
+  const adjustNote = (fuelOverride != null)
+    ? ` <b>→ 직접 조정 ${won(c.fuelCost)}</b>` : "";
+
+  document.getElementById("report").innerHTML = `
+    <div class="doc-title">출 장 정 산 보 고 서</div>
+    <div class="doc-sub">차량: ${CAR} (연비 ${c.eff} km/L)</div>
+    <table>
+      <tr><th>출장기간</th><td>${period}</td></tr>
+      <tr><th>출장지</th><td>${dest}</td></tr>
+      <tr><th>출장거리</th><td>편도 ${c.oneway} km / 왕복 ${c.roundtrip} km</td></tr>
+      <tr><th>소모 연료비
+        <div class="calc">왕복 ${c.roundtrip}km ÷ ${c.eff}km/L = ${c.liters.toFixed(2)}L × ${won(c.price)} = ${won(c.fuelBase)}<br>+ 감가상각 10% (${won(c.deprec)}) = ${won(c.fuelCalc)}${adjustNote}</div></th>
+        <td class="num">${won(c.fuelCost)}</td></tr>
+      <tr><th>숙박비</th><td class="num">${won(c.lodging)}</td></tr>
+      <tr><th>톨게이트 비용</th><td class="num">${won(c.toll)}</td></tr>
+      <tr><th>대중교통 비용</th><td class="num">${won(c.transit)}</td></tr>
+      <tr class="sum-row"><th>비용 합계</th><td class="num">${won(c.total)}</td></tr>
+    </table>
+    <h3>증빙 자료</h3>
+    <div class="evidence">${evHtml}</div>
+  `;
+}
+
+// 입력할 때마다 실시간 갱신 (연료비 입력칸은 따로 처리)
+document.querySelectorAll("input:not(#fuelCostInput)").forEach(i=> i.addEventListener("input", render));
+
+// 연료비 직접 수정
+const fuelField = document.getElementById("fuelCostInput");
+fuelField.addEventListener("input", ()=>{
+  fuelOverride = (fuelField.value === "") ? null : (parseFloat(fuelField.value) || 0);
+  render();
+});
+// 자동계산값보다 크게 입력하면 확인을 받는다
+fuelField.addEventListener("change", ()=>{
+  if(fuelOverride == null) return;
+  const auto = Math.round(calc().fuelCalc);
+  if(auto > 0 && fuelOverride > auto){
+    const ok = confirm(
+      `입력한 연료비 ${won(fuelOverride)} 가 자동계산값 ${won(auto)} 보다 큽니다.\n` +
+      `원칙적으로 자동계산 금액 이내로 입력해야 합니다.\n\n그래도 이 금액으로 진행하시겠습니까?`);
+    if(!ok){
+      fuelOverride = null;     // 취소 → 자동계산값으로 되돌림
+      render();
+    }
+  }
+});
+// 자동계산값으로 되돌리기
+document.getElementById("resetFuel").addEventListener("click", ()=>{
+  fuelOverride = null;
+  render();
+});
+
+render();
+
+// PDF 저장 = 브라우저 인쇄 기능 사용 (html2canvas 빈 페이지 문제 회피, 글자도 선명함)
+document.getElementById("makePdf").addEventListener("click", ()=>{
+  const dest = document.getElementById("dest").value || "출장";
+  const start = document.getElementById("startDate").value || "";
+  const origTitle = document.title;
+  document.title = `출장정산보고서_${dest}_${start}`;   // 저장 시 기본 파일명에 반영
+  window.print();
+  setTimeout(()=>{ document.title = origTitle; }, 500);
+});
+
+// PWA: 서비스워커 등록 (HTTPS/보안 컨텍스트에서만 동작 → 오프라인 + 앱 설치 가능)
+if("serviceWorker" in navigator && window.isSecureContext){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+</script>
+</body>
+</html>
