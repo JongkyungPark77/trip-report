@@ -19,10 +19,10 @@
          padding:16px; margin-bottom:16px; }
   .card h2{ font-size:15px; margin:0 0 12px; }
   label{ display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
-  input[type=text],input[type=number],input[type=date]{
+  input[type=text],input[type=number],input[type=date],select{
     width:100%; padding:11px 12px; font-size:16px; border:1px solid var(--line);
     border-radius:9px; background:#fff; color:var(--ink); }
-  input:focus{ outline:none; border-color:var(--accent); }
+  input:focus,select:focus{ outline:none; border-color:var(--accent); }
   .row{ display:flex; gap:12px; }
   .row > div{ flex:1; }
   .hint{ font-size:12px; color:var(--muted); margin-top:4px; }
@@ -53,8 +53,11 @@
   #report{ background:#fff; color:#111; padding:28px; }
   #report .doc-title{ text-align:center; font-size:22px; font-weight:800;
                       letter-spacing:4px; border-bottom:3px solid #111;
-                      padding-bottom:12px; margin-bottom:4px; }
+                      padding-bottom:12px; margin-bottom:18px; }
   #report .doc-sub{ text-align:center; color:#555; font-size:12px; margin-bottom:20px; }
+  #report td.calc-row{ font-size:11px; color:#555; font-weight:400; line-height:1.45;
+                       background:#fafafa; text-align:left; }
+  #report td.calc-row .carinfo{ color:#888; }
   #report table{ width:100%; border-collapse:collapse; font-size:13px; }
   #report th,#report td{ border:1px solid #888; padding:9px 10px; text-align:left;
                          vertical-align:middle; }
@@ -95,19 +98,31 @@
   <!-- ===== 차량 설정 (각자 한 번만 설정 → 저장됨) ===== -->
   <div class="card">
     <h2>⚙️ 차량 설정 <span style="font-weight:400;color:var(--muted);font-size:12px">(한 번만 설정하면 저장돼요)</span></h2>
-    <label>차종</label>
-    <input type="text" id="carName" placeholder="예: 2018년식 혼다 파일럿">
     <div class="row">
+      <div>
+        <label>제조사</label>
+        <select id="maker"></select>
+      </div>
+      <div>
+        <label>모델</label>
+        <select id="model"></select>
+      </div>
+    </div>
+    <input type="text" id="modelCustom" placeholder="모델 직접 입력" style="display:none;margin-top:8px">
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label>년식</label>
+        <input type="number" id="year" list="yearList" placeholder="예: 2018" min="1990" max="2030" inputmode="numeric">
+        <datalist id="yearList"></datalist>
+      </div>
       <div>
         <label>연비 (km/L)</label>
         <input type="number" id="eff" placeholder="8.7" min="0.1" step="0.1" inputmode="decimal">
       </div>
-      <div>
-        <label>감가상각 반영율 (%)</label>
-        <input type="number" id="deprecRate" placeholder="10" min="0" step="1" inputmode="decimal">
-      </div>
     </div>
-    <div class="hint">연료비 = 왕복거리 ÷ 연비 × 유가 + 감가상각율. 회사·차량 기준에 맞게 설정하세요.</div>
+    <label>감가상각 반영율 (%)</label>
+    <input type="number" id="deprecRate" placeholder="10" min="0" step="1" inputmode="decimal">
+    <div class="hint">제조사를 고르면 대표 모델이 자동 선택돼요. 목록에 없으면 '기타'를 고르고 직접 입력하세요.</div>
   </div>
 
   <!-- ===== 입력 ===== -->
@@ -179,20 +194,92 @@
 <script>
 const DEFAULT_EFF = 8.7;            // 기본 연비 km/L
 const DEFAULT_DEPREC = 10;          // 기본 감가상각 반영율 (%)
-const DEFAULT_CAR = "2018년식 혼다 파일럿";
 let fuelOverride = null;            // 연료비를 직접 수정하면 그 값, 아니면 null(자동계산 사용)
 
-// 차량 설정값을 브라우저에 기억시킨다 (한 번 설정하면 다음에도 자동으로 채워짐)
-function bindSetting(id, storeKey, fallback){
-  const el = document.getElementById(id);
-  el.value = localStorage.getItem(storeKey) || fallback;
-  el.addEventListener("input", ()=>{
-    if(el.value !== "") localStorage.setItem(storeKey, el.value);
+// 제조사별 대표 모델 (국내 + 수입 주요 20개사)
+const MAKERS = {
+  "현대": ["그랜저","쏘나타","아반떼","투싼","싼타페","팰리세이드","코나","스타리아"],
+  "기아": ["K5","K8","쏘렌토","스포티지","카니발","셀토스","모닝","K3"],
+  "제네시스": ["G80","G70","G90","GV70","GV80"],
+  "쉐보레": ["트레일블레이저","트랙스","말리부","스파크"],
+  "르노코리아": ["QM6","SM6","XM3"],
+  "KG모빌리티": ["토레스","렉스턴","티볼리"],
+  "도요타": ["캠리","코롤라","라브4","프리우스"],
+  "혼다": ["파일럿","CR-V","어코드","시빅","HR-V"],
+  "닛산": ["알티마","로그","엑스트레일"],
+  "폭스바겐": ["티구안","골프","파사트","아테온"],
+  "BMW": ["3시리즈","5시리즈","X3","X5"],
+  "메르세데스-벤츠": ["E클래스","C클래스","GLC","S클래스"],
+  "아우디": ["A6","A4","Q5","Q7"],
+  "볼보": ["XC60","S60","XC90","XC40"],
+  "포드": ["익스플로러","머스탱","레인저"],
+  "테슬라": ["모델3","모델Y","모델S"],
+  "렉서스": ["ES","RX","NX"],
+  "푸조": ["3008","5008","2008"],
+  "MINI": ["쿠퍼","컨트리맨"],
+  "지프": ["랭글러","체로키","컴패스"],
+  "기타": [],
+};
+const CUSTOM_MODEL = "기타(직접입력)";
+
+const makerSel    = document.getElementById("maker");
+const modelSel    = document.getElementById("model");
+const modelCustom = document.getElementById("modelCustom");
+const yearInput   = document.getElementById("year");
+const save = (k,v)=>{ if(v !== "") localStorage.setItem(k, v); };
+
+// 제조사 목록 채우기
+Object.keys(MAKERS).forEach(m=>{
+  const o = document.createElement("option"); o.value = o.textContent = m; makerSel.appendChild(o);
+});
+// 년식 선택지(올해~1995) — 직접 입력도 가능
+const thisYear = new Date().getFullYear();
+const yearList = document.getElementById("yearList");
+for(let y = thisYear; y >= 1995; y--){
+  const o = document.createElement("option"); o.value = y; yearList.appendChild(o);
+}
+
+function fillModels(maker){
+  modelSel.innerHTML = "";
+  (MAKERS[maker] || []).concat(CUSTOM_MODEL).forEach(m=>{
+    const o = document.createElement("option"); o.value = o.textContent = m; modelSel.appendChild(o);
   });
 }
-bindSetting("carName",    "tripReport_car",    DEFAULT_CAR);
-bindSetting("eff",        "tripReport_eff",    DEFAULT_EFF);
-bindSetting("deprecRate", "tripReport_deprec", DEFAULT_DEPREC);
+function updateCustom(){
+  const showText = (makerSel.value === "기타") || (modelSel.value === CUSTOM_MODEL);
+  modelCustom.style.display = showText ? "block" : "none";
+  modelSel.style.display    = (makerSel.value === "기타") ? "none" : "block";
+}
+function getCarName(){
+  let model = modelSel.value;
+  if(makerSel.value === "기타" || model === CUSTOM_MODEL) model = modelCustom.value.trim();
+  const maker = (makerSel.value === "기타") ? "" : makerSel.value;
+  const year  = yearInput.value;
+  return [year ? year+"년식" : "", maker, model].filter(Boolean).join(" ") || "차량 미설정";
+}
+
+// 저장값 복원 (없으면 사용자의 기존 차량을 기본값으로)
+makerSel.value = localStorage.getItem("tripReport_maker") || "혼다";
+fillModels(makerSel.value);
+modelSel.value = localStorage.getItem("tripReport_model") || "파일럿";
+if(!modelSel.value) modelSel.selectedIndex = 0;
+modelCustom.value = localStorage.getItem("tripReport_modelCustom") || "";
+yearInput.value   = localStorage.getItem("tripReport_year") || "2018";
+document.getElementById("eff").value        = localStorage.getItem("tripReport_eff")    || DEFAULT_EFF;
+document.getElementById("deprecRate").value = localStorage.getItem("tripReport_deprec") || DEFAULT_DEPREC;
+updateCustom();
+
+// 변경 시 저장 + 화면 갱신 (input들은 아래 공통 리스너가 render 처리)
+makerSel.addEventListener("change", ()=>{
+  save("tripReport_maker", makerSel.value);
+  if(makerSel.value !== "기타"){ fillModels(makerSel.value); modelSel.selectedIndex = 0; save("tripReport_model", modelSel.value); }
+  updateCustom(); render();
+});
+modelSel.addEventListener("change", ()=>{ save("tripReport_model", modelSel.value); updateCustom(); render(); });
+modelCustom.addEventListener("input", ()=> save("tripReport_modelCustom", modelCustom.value));
+yearInput.addEventListener("input",  ()=> save("tripReport_year", yearInput.value));
+document.getElementById("eff").addEventListener("input",        e=> save("tripReport_eff", e.target.value));
+document.getElementById("deprecRate").addEventListener("input", e=> save("tripReport_deprec", e.target.value));
 
 // 첨부 항목 정의
 const EVIDENCE = [
@@ -291,7 +378,7 @@ function render(){
   const fuelField = document.getElementById("fuelCostInput");
   if(fuelOverride == null) fuelField.value = c.fuelCalc ? Math.round(c.fuelCalc) : "";
 
-  const carName = document.getElementById("carName").value || "차량 미설정";
+  const carName = getCarName();
   document.getElementById("carSub").textContent = `차량: ${carName} · 연비 ${c.eff} km/L`;
 
   const period = periodText();
@@ -309,14 +396,12 @@ function render(){
 
   document.getElementById("report").innerHTML = `
     <div class="doc-title">출 장 정 산 보 고 서</div>
-    <div class="doc-sub">차량: ${carName} (연비 ${c.eff} km/L)</div>
     <table>
       <tr><th>출장기간</th><td>${period}</td></tr>
       <tr><th>출장지</th><td>${dest}</td></tr>
       <tr><th>출장거리</th><td>편도 ${c.oneway} km / 왕복 ${c.roundtrip} km</td></tr>
-      <tr><th>소모 연료비
-        <div class="calc">왕복 ${c.roundtrip}km ÷ ${c.eff}km/L = ${c.liters.toFixed(2)}L × ${won(c.price)} = ${won(c.fuelBase)}<br>+ 감가상각 ${c.deprecPct}% (${won(c.deprec)}) = ${won(c.fuelCalc)}${adjustNote}</div></th>
-        <td class="num">${won(c.fuelCost)}</td></tr>
+      <tr><th>소모 연료비</th><td class="num">${won(c.fuelCost)}</td></tr>
+      <tr><td colspan="2" class="calc-row">↳ 왕복 ${c.roundtrip}km ÷ ${c.eff}km/L × ${won(c.price)} = ${won(c.fuelBase)} + 감가상각 ${c.deprecPct}% ${won(c.deprec)} = ${won(c.fuelCalc)}${adjustNote}<span class="carinfo"> · 차량 ${carName}(연비 ${c.eff}km/L)</span></td></tr>
       <tr><th>숙박비</th><td class="num">${won(c.lodging)}</td></tr>
       <tr><th>톨게이트 비용</th><td class="num">${won(c.toll)}</td></tr>
       <tr><th>대중교통 비용</th><td class="num">${won(c.transit)}</td></tr>
